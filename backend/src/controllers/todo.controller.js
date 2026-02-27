@@ -7,10 +7,7 @@ async function createTask(req,res){
             title: req.body.title,
             targetDate: req.body.targetDate
         });
-        res.status(201).json({
-            message: "Task created Successfully",
-            task: newTodo
-        });
+        res.status(201).json(newTodo);
     }
     catch(error){
         console.error();
