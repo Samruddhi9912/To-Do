@@ -67,30 +67,27 @@ String get baseUrl {
       });
     }
   }
-
- Future<void> fetchTasks() async {
+Future<void> fetchTasks() async {
   try {
     final response = await http.get(
       Uri.parse("$baseUrl/api/todo/get"),
     );
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
+    final decoded = jsonDecode(response.body);
 
-if (data is List) {
-  setState(() {
-    tasks = data.map((e) => Todo.fromJson(e)).toList();
-  });
-}
-
+    if (decoded['todos'] != null) {
       setState(() {
-        tasks = data.map((e) => Todo.fromJson(e)).toList();
+        tasks = (decoded['todos'] as List)
+            .map<Todo>((e) => Todo.fromJson(e))
+            .toList();
       });
     }
   } catch (e) {
-    print(e);
+    print("ERROR: $e");
   }
 }
+
+
   Future<Todo> createTask(String title, DateTime date) async { 
      final response = await http.post(
     Uri.parse("$baseUrl/api/todo/create"),
