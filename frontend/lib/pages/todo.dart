@@ -10,30 +10,22 @@ class Todo {
 
   Todo({
     required this.id,
-    required this.title, 
-    required this.targetDate, 
-    this.completed = false
+    required this.title,
+    required this.targetDate,
+    this.completed = false,
   });
-factory Todo.fromJson(Map<String, dynamic> json) {
-  return Todo(
-    id: json['_id'] ?? "",
-    title: json['title'] ?? "",
-    completed: json['completed'] ?? false,
-    targetDate: json['targetDate'] != null
-        ? DateTime.parse(json['targetDate'])
-        : DateTime.now(),
-  );
-}
 
-  Map<String, dynamic> toJson() {
-    return {
-      "title": title,
-      "completed": completed,
-      "targetDate": targetDate.toIso8601String(),
-    };
+  factory Todo.fromJson(Map<String, dynamic> json) {
+    return Todo(
+      id: json['_id'] ?? "",
+      title: json['title'] ?? "",
+      completed: json['completed'] ?? false,
+      targetDate: json['targetDate'] != null
+          ? DateTime.parse(json['targetDate'])
+          : DateTime.now(),
+    );
   }
 }
-
 
 class TodoPage extends StatefulWidget {
   const TodoPage({super.key});
@@ -43,16 +35,87 @@ class TodoPage extends StatefulWidget {
 }
 
 class TodoPageState extends State<TodoPage> {
-  final Color marooncolor = Color(0xFFA44A3F);
+  final Color marooncolor = const Color(0xFFA44A3F);
 
   List<Todo> tasks = [];
-
   TextEditingController taskController = TextEditingController();
   DateTime? selectedDate;
 
-String get baseUrl {
-  return "http://localhost:3000";
-}
+  String get baseUrl => "ip";
+
+  Future<void> fetchTasks() async {
+    try {
+      final response =
+          await http.get(Uri.parse("$baseUrl/api/todo/get"));
+
+      print("STATUS: ${response.statusCode}");
+      print("BODY: ${response.body}");
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+
+        setState(() {
+          if (decoded is List) {
+            tasks = decoded
+                .map<Todo>((e) => Todo.fromJson(e))
+                .toList();
+          } else if (decoded['todos'] != null) {
+            tasks = (decoded['todos'] as List)
+                .map<Todo>((e) => Todo.fromJson(e))
+                .toList();
+          } else {
+            tasks = [];
+          }
+        });
+      } else {
+        print("FAILED: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("ERROR: $e");
+    }
+  }
+
+  Future<void> createTask(String title, DateTime date) async {
+    final response = await http.post(
+      Uri.parse("$baseUrl/api/todo/create"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "title": title,
+        "targetDate": date.toIso8601String(),
+      }),
+    );
+
+    if (response.statusCode == 200 ||
+        response.statusCode == 201) {
+      await fetchTasks(); 
+    } else {
+      throw Exception("Failed to create task");
+    }
+  }
+
+  Future<void> deleteTask(String id) async {
+    final response = await http.delete(
+      Uri.parse("$baseUrl/api/todo/delete/$id"),
+    );
+
+    if (response.statusCode == 200) {
+      await fetchTasks(); 
+    } else {
+      throw Exception("Delete failed");
+    }
+  }
+
+  Future<void> toggleComplete(String id) async {
+    final response = await http.put(
+      Uri.parse("$baseUrl/api/todo/update/$id"),
+    );
+
+    if (response.statusCode == 200) {
+      await fetchTasks(); 
+    } else {
+      throw Exception("Update failed");
+    }
+  }
 
   Future<void> pickDate() async {
     final date = await showDatePicker(
@@ -61,240 +124,123 @@ String get baseUrl {
       firstDate: DateTime.now(),
       lastDate: DateTime(2100),
     );
+
     if (date != null) {
-      setState(() {
-        selectedDate = date;
-      });
+      setState(() => selectedDate = date);
     }
   }
-Future<void> fetchTasks() async {
-  try {
-    final response = await http.get(
-      Uri.parse("$baseUrl/api/todo/get"),
-    );
-
-    final decoded = jsonDecode(response.body);
-
-    if (decoded['todos'] != null) {
-      setState(() {
-        tasks = (decoded['todos'] as List)
-            .map<Todo>((e) => Todo.fromJson(e))
-            .toList();
-      });
-    }
-  } catch (e) {
-    print("ERROR: $e");
-  }
-}
-
-
-  Future<Todo> createTask(String title, DateTime date) async { 
-     final response = await http.post(
-    Uri.parse("$baseUrl/api/todo/create"),
-    headers: {"Content-Type": "application/json"},
-    body: jsonEncode({
-      "title": title,
-      "targetDate": date.toIso8601String(),
-    }),
-  );
-
-  if (response.statusCode == 200 || response.statusCode == 201) {
-    final data = jsonDecode(response.body);
-    return Todo.fromJson(data);
-  } else {
-    throw Exception("Failed to create task");
-  }}
-
-Future<void> deleteTask(String id) async {
-  final response = await http.delete(
-    Uri.parse("$baseUrl/api/todo/delete/$id"),
-  );
-
-  if (response.statusCode != 200) {
-    throw Exception("Delete failed");
-  }
-}
-
-Future<void> toggleComplete(String id) async {
-  final response = await http.put(
-    Uri.parse("$baseUrl/api/todo/update/$id"),
-  );
-
-  if (response.statusCode != 200) {
-    throw Exception("Update failed");
-  }
-}
 
   void showAddTaskSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-                left: 16,
-                right: 16,
-                top: 16,
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 16,
+            right: 16,
+            top: 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: taskController,
+                decoration: const InputDecoration(
+                  labelText: "Write your task",
+                  border: OutlineInputBorder(),
+                ),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+              const SizedBox(height: 12),
+              Row(
                 children: [
-                  TextField(
-                    controller: taskController,
-                    decoration: InputDecoration(
-                      labelText: "Write your task",
-                      border: OutlineInputBorder(),
-                      enabledBorder: OutlineInputBorder(),
-                      focusedBorder: OutlineInputBorder(),
-                    ),
-                  ),
-                  SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          selectedDate == null
-                              ? "Pickup date"
-                              : "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
-                          style: TextStyle(fontSize: 16),
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.calendar_month),
-                        onPressed: pickDate,
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 12),
-                  ElevatedButton(
-                    onPressed:  () async {
-                        if (taskController.text.isEmpty || selectedDate == null) {
-                          return;
-                        }
-
-                        final newTask = await createTask(
-                          taskController.text,
-                          selectedDate!,
-                        );
-
-                        setState(() {
-                          tasks.add(newTask);
-                        });
-
-                        taskController.clear();
-                        selectedDate = null;
-
-                        Navigator.pop(context);
-                      },
+                  Expanded(
                     child: Text(
-                      "Add Task",
-                      style: TextStyle(color: marooncolor),
+                      selectedDate == null
+                          ? "Pick date"
+                          : "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
                     ),
                   ),
-                  SizedBox(height: 10),
+                  IconButton(
+                    icon: const Icon(Icons.calendar_month),
+                    onPressed: pickDate,
+                  ),
                 ],
               ),
-            );
-          },
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: () async {
+                  if (taskController.text.isEmpty ||
+                      selectedDate == null) return;
+
+                  await createTask(
+                      taskController.text, selectedDate!);
+
+                  taskController.clear();
+                  selectedDate = null;
+
+                  Navigator.pop(context);
+                },
+                child: Text(
+                  "Add Task",
+                  style: TextStyle(color: marooncolor),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
   }
 
- @override
-void initState() {
-  super.initState();
-  fetchTasks();
-}
+  @override
+  void initState() {
+    super.initState();
+    fetchTasks(); 
+  }
 
-@override
-void dispose() {
-  taskController.dispose();
-  super.dispose();
-}
+  @override
+  void dispose() {
+    taskController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        toolbarHeight: 60,
-        elevation: 0,
+        title: const Text("Todo"),
         backgroundColor: marooncolor,
-        iconTheme: IconThemeData(color: Colors.white),
-        title: Text(
-          "Todo",
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: showAddTaskSheet,
-        child: Icon(Icons.add_outlined),
+        child: const Icon(Icons.add),
       ),
-      body:
-          tasks.isEmpty
-              ? Center(
-                child: Text(
-                  "No tasks yet",
-                  style: TextStyle(
-                    color: marooncolor,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+      body: tasks.isEmpty
+          ? const Center(child: Text("No tasks yet"))
+          : ListView.builder(
+              itemCount: tasks.length,
+              itemBuilder: (context, index) {
+                final task = tasks[index];
+
+                return ListTile(
+                  leading: Checkbox(
+                    value: task.completed,
+                    onChanged: (_) =>
+                        toggleComplete(task.id),
                   ),
-                ),
-              )
-              : ListView.builder(
-                itemCount: tasks.length,
-                itemBuilder: (context, index) {
-                  final task = tasks[index];
-                  return Card(
-                    margin: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    child: ListTile(
-                      leading: Checkbox(
-                        value: task.completed,
-                        onChanged: (value) async {
-                          await toggleComplete(task.id);
-
-                          setState(() {
-                            task.completed = value!;
-                          });
-                        },
-                      ),
-                      title: Text(
-                        task.title,
-                        style: TextStyle(
-                          color: task.completed ? Colors.grey : Colors.black,
-                          decoration:
-                              task.completed ? TextDecoration.lineThrough : null,
-                        ),
-                      ),
-                      subtitle: Text(
-                        "${task.targetDate.day}/${task.targetDate.month}/${task.targetDate.year}",
-                        style: TextStyle(
-                          color: task.completed ? Colors.grey : Colors.black,
-                        ),
-                      ),
-                      trailing: IconButton(
-                        icon: Icon(
-                          Icons.delete,
-                          color: task.completed ? Colors.grey : Colors.black,
-                        ),
-                        onPressed: () async {
-                          await deleteTask(task.id);
-
-                          setState(() {
-                            tasks.removeAt(index);
-                          });
-                        },
-                      ),
-                    ),
-                  );
-                },
-              ),
+                  title: Text(task.title),
+                  subtitle: Text(
+                      "${task.targetDate.day}/${task.targetDate.month}/${task.targetDate.year}"),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete),
+                    onPressed: () =>
+                        deleteTask(task.id),
+                  ),
+                );
+              },
+            ),
     );
   }
 }
