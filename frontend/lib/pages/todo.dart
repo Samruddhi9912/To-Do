@@ -41,7 +41,7 @@ class TodoPageState extends State<TodoPage> {
   TextEditingController taskController = TextEditingController();
   DateTime? selectedDate;
 
-  String get baseUrl => "ip";
+  String get baseUrl => "http://localhost:3000";
 
   Future<void> fetchTasks() async {
     try {
@@ -210,7 +210,12 @@ class TodoPageState extends State<TodoPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Todo"),
+        title: const Text(
+          "Todo",
+          style: TextStyle(
+            color: Colors.white
+          ),
+          ),
         backgroundColor: marooncolor,
       ),
       floatingActionButton: FloatingActionButton(
