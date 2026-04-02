@@ -41,7 +41,13 @@ class TodoPageState extends State<TodoPage> {
   TextEditingController taskController = TextEditingController();
   DateTime? selectedDate;
 
-  String get baseUrl => "http://localhost:3000";
+  String get baseUrl => "https://to-do-gu1g.onrender.com";
+
+  @override
+  void initState() {
+    super.initState();
+    fetchTasks();
+  }
 
   Future<void> fetchTasks() async {
     try {
@@ -54,21 +60,21 @@ class TodoPageState extends State<TodoPage> {
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
 
-        setState(() {
-          if (decoded is List) {
-            tasks = decoded
-                .map<Todo>((e) => Todo.fromJson(e))
-                .toList();
-          } else if (decoded['todos'] != null) {
-            tasks = (decoded['todos'] as List)
-                .map<Todo>((e) => Todo.fromJson(e))
-                .toList();
-          } else {
-            tasks = [];
-          }
-        });
-      } else {
-        print("FAILED: ${response.statusCode}");
+        List dataList = [];
+
+        if (decoded is List) {
+          dataList = decoded;
+        } else if (decoded['todos'] != null) {
+          dataList = decoded['todos'];
+        } else if (decoded['data'] != null) {
+          dataList = decoded['data'];
+        }
+
+        if (mounted) {
+          setState(() {
+            tasks = dataList.map((e) => Todo.fromJson(e)).toList();
+          });
+        }
       }
     } catch (e) {
       print("ERROR: $e");
@@ -85,10 +91,11 @@ class TodoPageState extends State<TodoPage> {
       }),
     );
 
-    if (response.statusCode == 200 ||
-        response.statusCode == 201) {
-      await fetchTasks(); 
-    } else {
+    print("CREATE STATUS: ${response.statusCode}");
+    print("CREATE BODY: ${response.body}");
+
+    if (response.statusCode != 200 &&
+        response.statusCode != 201) {
       throw Exception("Failed to create task");
     }
   }
@@ -99,9 +106,7 @@ class TodoPageState extends State<TodoPage> {
     );
 
     if (response.statusCode == 200) {
-      await fetchTasks(); 
-    } else {
-      throw Exception("Delete failed");
+      fetchTasks();
     }
   }
 
@@ -111,9 +116,7 @@ class TodoPageState extends State<TodoPage> {
     );
 
     if (response.statusCode == 200) {
-      await fetchTasks(); 
-    } else {
-      throw Exception("Update failed");
+      fetchTasks();
     }
   }
 
@@ -126,7 +129,9 @@ class TodoPageState extends State<TodoPage> {
     );
 
     if (date != null) {
-      setState(() => selectedDate = date);
+      setState(() {
+        selectedDate = date;
+      });
     }
   }
 
@@ -153,6 +158,7 @@ class TodoPageState extends State<TodoPage> {
                 ),
               ),
               const SizedBox(height: 12),
+
               Row(
                 children: [
                   Expanded(
@@ -168,7 +174,9 @@ class TodoPageState extends State<TodoPage> {
                   ),
                 ],
               ),
+
               const SizedBox(height: 12),
+
               ElevatedButton(
                 onPressed: () async {
                   if (taskController.text.isEmpty ||
@@ -178,9 +186,16 @@ class TodoPageState extends State<TodoPage> {
                       taskController.text, selectedDate!);
 
                   taskController.clear();
-                  selectedDate = null;
 
-                  Navigator.pop(context);
+                  setState(() {
+                    selectedDate = null;
+                  });
+
+                  if (mounted) {
+                    Navigator.pop(context);
+                  }
+
+                  await fetchTasks();
                 },
                 child: Text(
                   "Add Task",
@@ -195,33 +210,21 @@ class TodoPageState extends State<TodoPage> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    fetchTasks(); 
-  }
-
-  @override
-  void dispose() {
-    taskController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
           "Todo",
-          style: TextStyle(
-            color: Colors.white
-          ),
-          ),
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: marooncolor,
       ),
+
       floatingActionButton: FloatingActionButton(
         onPressed: showAddTaskSheet,
         child: const Icon(Icons.add),
       ),
+
       body: tasks.isEmpty
           ? const Center(child: Text("No tasks yet"))
           : ListView.builder(
@@ -232,16 +235,15 @@ class TodoPageState extends State<TodoPage> {
                 return ListTile(
                   leading: Checkbox(
                     value: task.completed,
-                    onChanged: (_) =>
-                        toggleComplete(task.id),
+                    onChanged: (_) => toggleComplete(task.id),
                   ),
                   title: Text(task.title),
                   subtitle: Text(
-                      "${task.targetDate.day}/${task.targetDate.month}/${task.targetDate.year}"),
+                    "${task.targetDate.day}/${task.targetDate.month}/${task.targetDate.year}",
+                  ),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete),
-                    onPressed: () =>
-                        deleteTask(task.id),
+                    onPressed: () => deleteTask(task.id),
                   ),
                 );
               },
